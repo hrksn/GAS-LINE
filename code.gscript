@@ -1,0 +1,83 @@
+let SEARCH_WORD = '障害'; // GMAILの検索ワード
+
+let MAIL_FROM = 'server-down@example.com'; // 送り元の名前も含む (XXX <test@example.com>)
+let MAIL_FROM_MATCH = 1; // FROMのアドレスが一致しているか検証するか 0:検証しない 1:検証する
+
+let MAIL_TITLE = '障害通知'; // タイトルチェックのモードに合わせて変更
+let TITLE_EXACT_MATCH = 1; // 0: チェックしない 1: タイトルに含まれていればOK 2: 完全一致
+
+let LINE_TOKEN = 'AAAAAAAAAAAAAAAABBBBBBBBBBBBBBXXXXXXXXXXXXXXXXX';
+
+function searchAndSend(){
+  // 指定した件名のスレッドを検索して取得 
+  // 実行間隔の間に複数のメールが届く可能性がある場合は、合わせて件数を変更する
+  let threads = GmailApp.search(SEARCH_WORD, 0, 1); 
+  //スレッドからメールを取得し二次元配列に格納
+  let messages = GmailApp.getMessagesForThreads(threads);
+  for(let i in messages){
+    // 届いたメールはスレッドの0番目
+    let message = messages[i][0];
+
+    // 必ずタイトルが一致したものだけを取得してくれるわけではないので
+    // チェックが必要
+    if(!checkTarget(message)){
+      continue;
+    }
+
+    // スター有無によって実行済みを判定
+    // スターが増えていくのがイヤならゴミ箱に入れる
+    if(!message.isStarred()){
+      sendMessage = createMessage(message);
+      sendLine(sendMessage);
+      //message.moveToTrash();
+      message.star()
+    }
+  }
+}
+
+/**
+ * ターゲットとして正しいか確認
+ */
+function checkTarget(message){
+  // メールアドレスの一致チェック
+  if(MAIL_FROM_MATCH == 1 && message.getFrom() != MAIL_FROM){
+    return false;
+  }
+
+  if(TITLE_EXACT_MATCH > 0){
+    // タイトルの完全一致
+    if(TITLE_EXACT_MATCH == 2 && message.getSubject() != MAIL_TITLE){
+      return false;
+    }
+    // タイトルの部分一致
+    else if(TITLE_EXACT_MATCH == 1 && message.getSubject().indexOf(MAIL_TITLE) < 0){
+      return false;
+    }
+  }
+
+  return true;
+}
+
+/**
+ * 送信メッセージを構築
+ */
+function createMessage(message){
+  return message.getDate() + message.getPlainBody();
+}
+
+/**
+ * LINE notifyで送信
+ */
+function sendLine(message){
+   
+  //Lineに送信するためのトークン
+  let options =
+   {
+     "method"  : "post",
+     "payload" : "message=" + message,
+     "headers" : {"Authorization" : "Bearer "+ LINE_TOKEN}
+ 
+   };
+ 
+   UrlFetchApp.fetch("https://notify-api.line.me/api/notify",options);
+}
